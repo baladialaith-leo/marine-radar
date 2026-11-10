@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Marine M-ECDIS Tactical Radar</title>
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#020617">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{width:100%;height:100%;background:#020617;color:#f8fafc;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#app{position:fixed;top:0;left:0;width:100%;height:var(--vh,100dvh);display:flex;flex-direction:column;gap:6px;
+ padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))}
+.hdr{display:flex;justify-content:space-between;align-items:center;background:#0f172a;border:1px solid #1e293b;padding:7px 10px;border-radius:6px;flex-shrink:0;direction:ltr}
+.ttl{font-size:.72rem;font-weight:800;color:#38bdf8}.pos{font-size:.72rem;font-family:monospace;color:#22c55e}
+#alert{display:none;flex-shrink:0;background:rgba(225,29,72,.2);border:1px solid #f43f5e;color:#fecdd3;padding:6px 8px;border-radius:6px;font-size:.72rem;font-weight:700;align-items:center;justify-content:space-between;gap:8px;animation:p 1s infinite}
+#alert.on{display:flex}@keyframes p{50%{opacity:.55}}
+#alert button{background:#f43f5e;color:#fff;border:0;border-radius:4px;padding:6px 12px;font-weight:700}
+.row{display:flex;gap:4px;flex-shrink:0}
+.tab,.cb{flex:1;background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:9px 2px;border-radius:6px;font-size:.7rem;font-weight:700;text-align:center}
+.tab.on{background:#0284c7;color:#fff;border-color:#38bdf8}
+.cb{background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;align-items:center;gap:2px}
+.cb b{color:#38bdf8;font-family:monospace;font-size:.72rem}
+.cb:active,.tab:active{filter:brightness(1.4)}
+#box{position:relative;flex:1 1 auto;min-height:0;background:#000;border:1px solid #1e293b;border-radius:8px;overflow:hidden}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.pan{position:absolute;inset:0;background:rgba(15,23,42,.97);z-index:5;padding:10px;overflow:auto;display:none;font-size:.75rem}
+.pan.on{display:block}.pan h4{color:#38bdf8;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-size:.7rem;direction:ltr}
+th,td{border:1px solid #334155;padding:5px;text-align:center}th{background:#1e293b;color:#38bdf8}
+.f{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;color:#94a3b8}
+.f input,.f select{background:#1e293b;border:1px solid #334155;color:#fff;padding:7px;border-radius:4px;font-size:.8rem;user-select:text;direction:ltr}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{width:100%;background:#0284c7;color:#fff;border:0;padding:10px;border-radius:5px;font-weight:700;margin-top:4px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hdr"><div class="ttl">M-ECDIS TACTICAL RADAR</div><div class="pos" id="pos">--</div></div>
+  <div id="alert"><span id="alertTxt"></span><button id="ack">ACK</button></div>
+  <div class="row">
+    <button class="tab on" data-t="radar">الرادار</button>
+    <button class="tab" data-t="ais">أهداف AIS / ARPA</button>
+    <button class="tab" data-t="set">الإعدادات</button>
+  </div>
+
+  <div id="box">
+    <canvas id="cv"></canvas>
+    <div class="pan" id="p-ais">
+      <h4>جدول الأهداف (مرتب حسب CPA)</h4>
+      <table><thead><tr><th>MMSI</th><th>Range NM</th><th>Brg °T</th><th>CPA NM</th><th>TCPA mm:ss</th><th>Status</th></tr></thead><tbody id="tb"></tbody></table>
+    </div>
+    <div class="pan" id="p-set">
+      <h4>الإعدادات</h4>
+      <div class="f"><label>مصدر البيانات</label>
+        <select id="sMode"><option value="SIM">محاكاة (SIM)</option><option value="LIVE">بث حي (LIVE AIS)</option></select></div>
+      <div class="g">
+        <div class="f"><label>حد CPA (NM)</label><input id="sCpa" type="number" step="0.1" min="0.1" max="5"></div>
+        <div class="f"><label>حد TCPA (دقيقة)</label><input id="sTcpa" type="number" step="1" min="1" max="60"></div>
+        <div class="f"><label>اتجاه سفينتك COG °</label><input id="sCog" type="number" min="0" max="359"></div>
+        <div class="f"><label>سرعة سفينتك SOG kn</label><input id="sSog" type="number" min="0" max="40" step="0.5"></div>
+      </div>
+      <div class="f"><label>WebSocket URL (LIVE)</label><input id="sUrl" type="text"></div>
+      <div class="f"><label>API Key (LIVE)</label><input id="sKey" type="text" placeholder="AISStream API key"></div>
+      <div class="f"><label><input id="sGps" type="checkbox"> استخدام GPS الهاتف لموقعي وسرعتي (LIVE)</label></div>
+      <div>الحالة: <span id="conn" style="color:#22c55e">SIM</span></div>
+      <button class="btn" id="apply">تطبيق وإعادة التشغيل</button>
+      <button class="btn" id="btnInstall" style="display:none;background:#16a34a">تثبيت التطبيق على الهاتف</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <button class="cb" id="bRange">المدى<b id="vRange"></b></button>
+    <button class="cb" id="bOri">الاتجاه<b id="vOri"></b></button>
+    <button class="cb" id="bVec">المتجهات<b id="vVec"></b></button>
+    <button class="cb" id="bVt">زمن المتجه<b id="vVt"></b></button>
+  </div>
+</div>
+
+<script>
+'use strict';
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW', e)));
+}
+const $ = id => document.getElementById(id);
+const D = Math.PI / 180;
+const RANGES = [1.5, 3, 6, 12, 24], VT = [3, 6, 12, 30], ORI = ['NORTH-UP', 'HEAD-UP', 'COURSE-UP'];
+function load() { try { return JSON.parse(localStorage.getItem('mr8')) || {}; } catch (e) { return {}; } }
+function save() { try { localStorage.setItem('mr8', JSON.stringify(S)); } catch (e) {} }
+const S = Object.assign({ ri: 2, oi: 0, vm: 'TRUE', vti: 1, cpaLim: 0.5, tcpaLim: 20, mode: 'SIM',
+  url: 'wss://stream.aisstream.io/v0/stream', key: '', gps: false, cog: 45, sog: 12 }, load());
+const own = { lat: 26.9839, lon: 56.3742, sog: S.sog, cog: S.cog, hdg: S.cog };
+const targets = new Map();
+let courseLock = own.cog, muted = false, alarmOn = false;
+
+/* ---------- viewport (يمنع الشاشة السوداء/القص في كروم أندرويد) ---------- */
+function setVH() {
+  const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  document.documentElement.style.setProperty('--vh', h + 'px');
+}
+setVH();
+addEventListener('resize', setVH); addEventListener('orientationchange', () => setTimeout(setVH, 200));
+if (window.visualViewport) visualViewport.addEventListener('resize', setVH);
+
+/* ---------- canvas ---------- */
+const cv = $('cv'), ctx = cv.getContext('2d'), box = $('box');
+let W = 0, H = 0, dpr = 1;
+function resize() {
+  const w = box.clientWidth, h = box.clientHeight;
+  if (w < 2 || h < 2) return;
+  dpr = Math.min(window.devicePixelRatio || 1, 3);
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); W = w; H = h;
+}
+if (window.ResizeObserver) new ResizeObserver(resize).observe(box);
+addEventListener('resize', resize); resize();
+
+/* ---------- حسابات ---------- */
+const vel = (s, c) => [s * Math.sin(c * D), s * Math.cos(c * D)];
+function dr(o, dt) {
+  const d = o.sog * dt / 3600, c = o.cog * D;
+  o.lat += d * Math.cos(c) / 60; o.lon += d * Math.sin(c) / (60 * Math.cos(o.lat * D));
+}
+function calc() {
+  const ov = vel(own.sog, own.cog), kl = Math.cos(own.lat * D);
+  for (const t of targets.values()) {
+    const x = (t.lon - own.lon) * 60 * kl, y = (t.lat - own.lat) * 60;
+    const tv = vel(t.sog, t.cog), vx = tv[0] - ov[0], vy = tv[1] - ov[1];
+    const v2 = vx * vx + vy * vy, rng = Math.hypot(x, y);
+    let tc = 0, cpa = rng;
+    if (v2 > 1e-6) { tc = -(x * vx + y * vy) / v2; if (tc > 0) cpa = Math.hypot(x + vx * tc, y + vy * tc); }
+    Object.assign(t, { x, y, vx, vy, tvx: tv[0], tvy: tv[1], rng, brg: (Math.atan2(x, y) / D + 360) % 360,
+      cpa, tcpa: tc * 60, closing: tc > 0 });
+    t.danger = t.closing && t.cpa < S.cpaLim && t.tcpa <= S.tcpaLim;
+  }
+}
+const fmt = m => { const s = Math.round(m * 60); return m > 99 ? '>99m' : Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+
+/* ---------- محاكاة ---------- */
+function addPolar(mmsi, r, b, cog, sog) {
+  targets.set(String(mmsi), { mmsi: String(mmsi), sog, cog, ts: Date.now(),
+    lat: own.lat + r * Math.cos(b * D) / 60, lon: own.lon + r * Math.sin(b * D) / (60 * Math.cos(own.lat * D)) });
+}
+function initSim() {
+  targets.clear();
+  [[477123980, 2.1, 42, 215, 13], [215889000, 4.8, 135, 95, 15], [636092001, 3.4, 300, 120, 10],
+   [538005432, 8, 10, 180, 18], [244670123, 5.5, 200, 20, 8]].forEach(a => addPolar(...a));
+}
+
+/* ---------- بث حي + GPS ---------- */
+let ws = null, gpsId = null;
+const setConn = (t, c) => { $('conn').textContent = t; $('conn').style.color = c; };
+function stopLive() { if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; } if (gpsId != null) { navigator.geolocation.clearWatch(gpsId); gpsId = null; } }
+function startGPS() {
+  if (!S.gps || !navigator.geolocation) return;
+  gpsId = navigator.geolocation.watchPosition(p => {
+    own.lat = p.coords.latitude; own.lon = p.coords.longitude;
+    if (p.coords.speed != null) own.sog = p.coords.speed * 1.94384;
+    if (p.coords.heading != null && !isNaN(p.coords.heading) && own.sog > 0.5) { own.cog = p.coords.heading; own.hdg = own.cog; }
+  }, () => setConn('GPS غير متاح', '#eab308'), { enableHighAccuracy: true, maximumAge: 1000 });
+}
+function connectLive() {
+  if (!S.key) { setConn('أدخل مفتاح API', '#eab308'); return; }
+  setConn('جاري الاتصال...', '#eab308');
+  try { ws = new WebSocket(S.url); } catch (e) { setConn('رابط غير صالح', '#f43f5e'); return; }
+  ws.onopen = () => {
+    const d = 0.5;
+    ws.send(JSON.stringify({ APIKey: S.key, BoundingBoxes: [[[own.lat - d, own.lon - d], [own.lat + d, own.lon + d]]], FilterMessageTypes: ['PositionReport'] }));
+    setConn('متصل — LIVE', '#22c55e');
+  };
+  ws.onmessage = e => {
+    try {
+      const m = JSON.parse(e.data), p = m.Message && m.Message.PositionReport; if (!p) return;
+      const id = String(m.MetaData.MMSI).replace(/\D/g, ''); if (!id) return;
+      const cog = p.Cog < 360 ? p.Cog : (p.TrueHeading < 360 ? p.TrueHeading : 0);
+      targets.set(id, { mmsi: id, lat: p.Latitude, lon: p.Longitude, sog: p.Sog < 102.3 ? p.Sog : 0, cog, ts: Date.now() });
+    } catch (_) {}
+  };
+  ws.onerror = () => setConn('خطأ اتصال', '#f43f5e');
+  ws.onclose = () => setConn('انقطع الاتصال', '#f43f5e');
+}
+function applyMode() {
+  stopLive(); targets.clear(); muted = false;
+  if (S.mode === 'SIM') { own.sog = S.sog; own.cog = own.hdg = S.cog; initSim(); setConn('SIM', '#22c55e'); }
+  else { startGPS(); connectLive(); }
+  courseLock = own.cog;
+}
+
+/* ---------- الرسم ---------- */
+function draw(now) {
+  if (!W || !H) { resize(); return; }
+  const cx = W / 2, cy = H / 2, R = Math.max(40, Math.min(cx, cy) - 22), rg = RANGES[S.ri], s = R / rg;
+  const U = S.oi === 0 ? 0 : S.oi === 1 ? own.hdg : courseLock, a = U * D, ca = Math.cos(a), sa = Math.sin(a);
+  const P = (x, y) => [cx + s * (x * ca - y * sa), cy - s * (x * sa + y * ca)];
+  const T = VT[S.vti] / 60, TAU = 6.2832;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.direction = 'ltr';
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+  ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let b = 0; b < 360; b += 10) {
+    const t = (b - U) * D, ux = Math.sin(t), uy = -Math.cos(t), l = b % 30 === 0 ? 9 : 5;
+    ctx.beginPath(); ctx.moveTo(cx + ux * R, cy + uy * R); ctx.lineTo(cx + ux * (R - l), cy + uy * (R - l)); ctx.stroke();
+    if (b % 30 === 0) { ctx.fillStyle = b === 0 ? '#f43f5e' : '#64748b'; ctx.fillText(b === 0 ? 'N' : String(b), cx + ux * (R + 12), cy + uy * (R + 12)); }
+  }
+  ctx.strokeStyle = 'rgba(56,189,248,.28)'; ctx.lineWidth = 1; ctx.textAlign = 'left';
+  for (let i = 1; i <= 3; i++) {
+    const r = R * i / 3; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#38bdf8'; ctx.fillText((rg / 3 * i).toFixed(1) + ' NM', cx + 4, cy - r + 10);
+  }
+
+  // المسح (Sweep) مع ذيل متلاشٍ
+  const sw = (now / 3000 * 360) % 360;
+  for (let i = 0; i < 24; i++) {
+    const a1 = (sw - (i + 1) * 1.6) * D - Math.PI / 2, a2 = (sw - i * 1.6) * D - Math.PI / 2;
+    ctx.fillStyle = 'rgba(34,197,94,' + (0.22 * (1 - i / 24)).toFixed(3) + ')';
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a1, a2); ctx.closePath(); ctx.fill();
+  }
+  const sr = sw * D - Math.PI / 2;
+  ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(sr) * R, cy + Math.sin(sr) * R); ctx.stroke();
+
+  // خط الرأس (Heading Line)
+  const hs = (own.hdg - U) * D;
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(hs) * R, cy - Math.cos(hs) * R); ctx.stroke();
+
+  // متجه سفينتنا (TRUE فقط)
+  if (S.vm === 'TRUE') {
+    const ov = vel(own.sog, own.cog), e = P(ov[0] * T, ov[1] * T);
+    ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(e[0], e[1]); ctx.stroke();
+  }
+
+  // الأهداف
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.clip();
+  const blink = Math.floor(now / 400) % 2 === 0;
+  for (const t of targets.values()) {
+    if (t.x === undefined) continue;
+    const p = P(t.x, t.y); if (Math.hypot(p[0] - cx, p[1] - cy) > R + 12) continue;
+    const col = t.danger ? '#f43f5e' : (t.closing && t.cpa < S.cpaLim * 2 ? '#facc15' : '#22c55e');
+    const vx = S.vm === 'TRUE' ? t.tvx : t.vx, vy = S.vm === 'TRUE' ? t.tvy : t.vy, e = P(t.x + vx * T, t.y + vy * T);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    if (S.vm === 'REL') ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(e[0], e[1]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate((t.cog - U) * D);
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(-5, 5); ctx.closePath(); ctx.stroke(); ctx.restore();
+    if (t.danger && blink) { ctx.beginPath(); ctx.arc(p[0], p[1], 13, 0, TAU); ctx.stroke(); }
+    ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.fillText(t.mmsi, p[0] + 9, p[1] - 8);
+  }
+  ctx.restore();
+
+  ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'left';
+  ctx.fillText(ORI[S.oi] + '  ' + rg + ' NM  ' + S.vm + ' ' + VT[S.vti] + 'm', 8, 14);
+  ctx.fillText('COG ' + own.cog.toFixed(0).padStart(3, '0') + '°  SOG ' + own.sog.toFixed(1) + ' kn', 8, 28);
+}
+function frame(now) { try { draw(now); } catch (e) { console.error(e); } requestAnimationFrame(frame); }
+
+/* ---------- إنذار صوتي / بصري ---------- */
+let ac = null;
+function unlock() {
+  if (!ac) { const C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+  if (ac && ac.state === 'suspended') ac.resume();
+}
+['touchstart', 'click'].forEach(ev => addEventListener(ev, unlock, { passive: true }));
+function beep() {
+  if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'square'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ac.destination);
+  o.start(); o.stop(ac.currentTime + 0.25);
+}
+function alarmTick() {
+  let d = null;
+  for (const t of targets.values()) if (t.danger && (!d || t.tcpa < d.tcpa)) d = t;
+  alarmOn = !!d; if (!alarmOn) muted = false;
+  $('alert').classList.toggle('on', alarmOn);
+  if (d) {
+    $('alertTxt').textContent = '⚠️ خطر تصادم  MMSI ' + d.mmsi + ' | CPA ' + d.cpa.toFixed(2) + ' NM | TCPA ' + fmt(d.tcpa);
+    if (!muted) { beep(); if (navigator.vibrate) navigator.vibrate(200); }
+  }
+}
+function table() {
+  const arr = [...targets.values()].filter(t => t.x !== undefined).sort((a, b) => a.cpa - b.cpa);
+  $('tb').innerHTML = arr.map(t => {
+    const st = t.danger ? ['DANGER', '#f43f5e'] : !t.closing ? ['DIVERGING', '#94a3b8'] : t.cpa < S.cpaLim * 2 ? ['CAUTION', '#facc15'] : ['SAFE', '#22c55e'];
+    return '<tr><td>' + t.mmsi + '</td><td>' + t.rng.toFixed(2) + '</td><td>' + Math.round(t.brg) + '°</td><td style="color:' +
+      (t.cpa < S.cpaLim ? '#f43f5e' : '#38bdf8') + ';font-weight:700">' + t.cpa.toFixed(2) + '</td><td>' + (t.closing ? fmt(t.tcpa) : '--') +
+      '</td><td style="color:' + st[1] + '">' + st[0] + '</td></tr>';
+  }).join('') || '<tr><td colspan="6">لا توجد أهداف</td></tr>';
+}
+
+/* ---------- حلقة التحديث ---------- */
+let last = performance.now(), n = 0;
+setInterval(() => {
+  const now = performance.now(), dt = Math.min((now - last) / 1000, 5); last = now;
+  dr(own, dt);
+  for (const [id, t] of targets) { dr(t, dt); if (S.mode === 'LIVE' && Date.now() - t.ts > 600000) targets.delete(id); }
+  calc();
+  $('pos').textContent = Math.abs(own.lat).toFixed(4) + '°' + (own.lat >= 0 ? 'N' : 'S') + ' ' + Math.abs(own.lon).toFixed(4) + '°' + (own.lon >= 0 ? 'E' : 'W');
+  if (++n % 4 === 0) { alarmTick(); if ($('p-ais').classList.contains('on')) table(); }
+}, 250);
+
+/* ---------- واجهة المستخدم ---------- */
+function ui() {
+  $('vRange').textContent = RANGES[S.ri] + ' NM'; $('vOri').textContent = ORI[S.oi];
+  $('vVec').textContent = S.vm; $('vVt').textContent = VT[S.vti] + ' min';
+}
+$('bRange').onclick = () => { S.ri = (S.ri + 1) % RANGES.length; save(); ui(); };
+$('bOri').onclick = () => { S.oi = (S.oi + 1) % 3; if (S.oi === 2) courseLock = own.cog; save(); ui(); };
+$('bVec').onclick = () => { S.vm = S.vm === 'TRUE' ? 'REL' : 'TRUE'; save(); ui(); };
+$('bVt').onclick = () => { S.vti = (S.vti + 1) % VT.length; save(); ui(); };
+$('ack').onclick = () => { muted = true; };
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('on')); b.classList.add('on');
+  document.querySelectorAll('.pan').forEach(p => p.classList.remove('on'));
+  if (b.dataset.t === 'ais') { $('p-ais').classList.add('on'); table(); }
+  if (b.dataset.t === 'set') $('p-set').classList.add('on');
+});
+function fillSettings() {
+  $('sMode').value = S.mode; $('sCpa').value = S.cpaLim; $('sTcpa').value = S.tcpaLim; $('sCog').value = S.cog;
+  $('sSog').value = S.sog; $('sUrl').value = S.url; $('sKey').value = S.key; $('sGps').checked = S.gps;
+}
+$('apply').onclick = () => {
+  S.mode = $('sMode').value; S.cpaLim = Math.max(0.1, +$('sCpa').value || 0.5); S.tcpaLim = Math.max(1, +$('sTcpa').value || 20);
+  S.cog = ((+$('sCog').value || 0) % 360 + 360) % 360; S.sog = Math.max(0, +$('sSog').value || 0);
+  S.url = $('sUrl').value.trim(); S.key = $('sKey').value.trim(); S.gps = $('sGps').checked;
+  save(); applyMode();
+};
+let dp = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); dp = e; $('btnInstall').style.display = 'block'; });
+$('btnInstall').onclick = async () => { if (!dp) return; dp.prompt(); try { await dp.userChoice; } catch (e) {} dp = null; $('btnInstall').style.display = 'none'; };
+addEventListener('appinstalled', () => { $('btnInstall').style.display = 'none'; });
+
+fillSettings(); ui(); applyMode(); calc(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
