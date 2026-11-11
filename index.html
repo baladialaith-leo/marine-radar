@@ -1,39 +1,407 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Marine M-ECDIS Tactical Radar</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#020617">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#020617;--pn:#0b1224;--ln:#1e293b;--tx:#e2e8f0;--mt:#7c8aa5;--ac:#22d3ee;--ok:#4ade80;--wr:#fbbf24;--dg:#f87171;--rg:#164e63}
+body.night{--bg:#0a0000;--pn:#140404;--ln:#3a0f0f;--tx:#d33;--mt:#833;--ac:#c22;--ok:#a22;--wr:#d44;--dg:#f55;--rg:#400}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,"Segoe UI",Tahoma,Arial,sans-serif;-webkit-tap-highlight-color:transparent}
+body{padding:env(safe-area-inset-top) 8px calc(env(safe-area-inset-bottom) + 16px)}
+header{display:flex;align-items:center;gap:8px;padding:8px 2px;flex-wrap:wrap}
+h1{font-size:15px;margin:0;flex:1;letter-spacing:.5px;color:var(--ac)}
+.badge{padding:2px 10px;border-radius:4px;font-weight:700;font-size:13px;border:1px solid var(--ln)}
+.badge.ok{color:var(--ok);border-color:var(--ok)}.badge.bad{color:var(--dg);border-color:var(--dg)}
+button,select,input{font:inherit;color:var(--tx);background:var(--pn);border:1px solid var(--ln);border-radius:6px;padding:7px 10px;min-height:38px}
+button{cursor:pointer}button.on{border-color:var(--ac);color:var(--ac)}
+#ack{border-color:var(--dg);color:var(--dg);font-weight:700}
+#alarm{display:none;background:var(--dg);color:#000;font-weight:700;text-align:center;padding:8px;border-radius:6px;margin-bottom:8px}
+body.night #alarm{color:#000}
+#wrap{max-width:560px;margin:0 auto}
+canvas{width:100%;aspect-ratio:1;display:block;background:var(--bg);border:1px solid var(--ln);border-radius:8px;touch-action:manipulation}
+section{background:var(--pn);border:1px solid var(--ln);border-radius:8px;padding:10px;margin-top:10px}
+h2{font-size:14px;margin:0 0 8px;color:var(--ac)}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mt);gap:3px}
+label input,label select{width:100%;color:var(--tx);font-size:15px}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.row button{flex:1}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:5px 3px;text-align:center;border-bottom:1px solid var(--ln)}
+th{color:var(--mt);font-weight:600;font-size:12px}
+tr.w td{color:var(--wr)}tr.d td{color:var(--dg);font-weight:700}
+.tbw{overflow-x:auto}
+.st{font-size:12px;color:var(--mt);display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;margin-top:8px}
+input[type=range]{padding:0;min-height:30px}
+</style>
+</head>
+<body>
+<div id="wrap">
+<header>
+ <h1>ECDIS TACTICAL RADAR</h1>
+ <span id="fix" class="badge bad">NO FIX</span>
+ <button id="ack">ACK</button>
+</header>
+<div id="alarm"></div>
+<canvas id="cv"></canvas>
 
-M-ECDIS TACTICAL RADAR
-NO FIX
-ACK
-الرادار أهداف AIS / ARPA الإعدادات
+<section>
+ <h2>الرادار</h2>
+ <div class="g">
+  <label>المدى <select id="rng"></select></label>
+  <label>الاتجاه <select id="ori"><option value="hu">رأس السفينة للأعلى</option><option value="nu">الشمال للأعلى</option></select></label>
+  <label>المتجهات (دقيقة) <select id="vec"><option>0</option><option>3</option><option>6</option><option>12</option><option>24</option></select></label>
+  <label>وحدة المسافة <select id="ud"><option value="nm">ميل بحري NM</option><option value="km">كيلومتر km</option><option value="mi">ميل mi</option></select></label>
+  <label>وحدة السرعة <select id="us"><option value="kn">عقدة kn</option><option value="kmh">كم/س</option><option value="mph">ميل/س</option></select></label>
+  <label>الوضع <select id="nt"><option value="0">نهاري</option><option value="1">ليلي (أحمر)</option></select></label>
+ </div>
+</section>
 
-الأهداف الحية (مرتبة حسب CPA)
-Target
-Range NM
-Brg °T
-CPA NM
-TCPA
-Status
+<section>
+ <h2>الأهداف الحية (مرتبة حسب CPA)</h2>
+ <div class="tbw"><table><thead><tr><th>Target</th><th id="thR">Range</th><th>Brg °T</th><th id="thC">CPA</th><th>TCPA</th><th>Status</th></tr></thead><tbody id="tb"></tbody></table></div>
+ <div id="empty" style="color:var(--mt);font-size:13px;padding:8px">لا توجد أهداف. فعّل بث AIS أو التجريبي.</div>
+</section>
 
+<section>
+ <h2>حالة سفينتي</h2>
+ <div class="g">
+  <label>الحالة <select id="nav"><option>Under Way Using Engine</option><option>At Anchor</option><option>Moored</option><option>Constrained by Draft</option></select></label>
+  <label>مصدر الموقع <select id="mode"><option value="gps">GPS الهاتف (تلقائي)</option><option value="man">إدخال يدوي / DR (تشويش GPS)</option></select></label>
+  <label>Lat (26.96 أو 26 57.6 N)<input id="lat" inputmode="text" dir="ltr" placeholder="26.96"></label>
+  <label>Lon (56.27 أو 56 16.5 E)<input id="lon" inputmode="text" dir="ltr" placeholder="56.27"></label>
+  <label>COG يدوي °<input id="cog" inputmode="decimal" dir="ltr" placeholder="تلقائي"></label>
+  <label><span id="sogL">SOG يدوي</span><input id="sog" inputmode="decimal" dir="ltr" placeholder="تلقائي"></label>
+  <label>الاتجاه HDG <select id="hs"><option value="compass">بوصلة الهاتف</option><option value="cog">من COG</option><option value="man">يدوي</option></select></label>
+  <label>HDG يدوي °<input id="hdg" inputmode="decimal" dir="ltr" placeholder="0"></label>
+ </div>
+ <div class="row" style="margin-top:8px"><button id="cmp">تفعيل مستشعر البوصلة</button><button id="demo">أهداف تجريبية</button></div>
+</section>
 
-حالة سفينتي
-Under Way Using EngineAt Anchor MooredConstrained by Draft
-الموقع
-GPS الهاتف (تلقائي)إدخال يدوي / DR (تشويش GPS)
+<section>
+ <h2>حدود الإنذار</h2>
+ <div class="g">
+  <label><span id="cpaL">CPA (NM)</span><input id="cpa" inputmode="decimal" dir="ltr"></label>
+  <label>TCPA (دقيقة)<input id="tcpa" inputmode="decimal" dir="ltr"></label>
+ </div>
+</section>
 
-Lat (26.96 أو 26 57.6 N)
-Lon (56.27 أو 56 16.5 E)
-COG يدوي °
-SOG يدوي kn
-الاتجاه HDG
+<section>
+ <h2>بث AIS الحي</h2>
+ <label>رابط المرحّل Relay URL (wss://...workers.dev)<input id="relay" dir="ltr" placeholder="wss://example.workers.dev"></label>
+ <div class="row" style="margin-top:8px"><button id="conn">اتصال</button><button id="disc">قطع</button></div>
+ <div class="st"><span id="sC">الاتصال: --</span><span id="sP">الموقع: --</span><span id="sH">البوصلة: --</span><span id="sT">الأهداف: 0</span></div>
+ <div class="row" style="margin-top:8px"><button id="inst" style="display:none">تثبيت التطبيق على الهاتف</button></div>
+</section>
+</div>
 
-بوصلة الهاتفمن COGيدوي
-تفعيل مستشعر البوصلة
-حدود الإنذار
+<script>
+(function(){
+"use strict";
+var $=function(i){return document.getElementById(i)};
+var DF={nm:1,km:1.852,mi:1.15078},SF={kn:1,kmh:1.852,mph:1.15078},DL={nm:"NM",km:"km",mi:"mi"},SL={kn:"kn",kmh:"km/h",mph:"mph"};
+var D2R=Math.PI/180;
+var S={rng:6,ori:"hu",vec:6,ud:"nm",us:"kn",nt:"0",nav:0,mode:"gps",lat:"",lon:"",cog:"",sog:"",hs:"compass",hdg:"",cpa:"0.5",tcpa:"12",relay:""};
+try{var sv=JSON.parse(localStorage.getItem("mr9")||"{}");for(var k in sv)if(k in S)S[k]=sv[k]}catch(e){}
+function save(){try{localStorage.setItem("mr9",JSON.stringify(S))}catch(e){}}
 
-CPA (NM)
-TCPA (دقيقة)
-بث AIS الحي
-رابط المرحّل Relay URL (wss://...workers.dev)
-الاتصال: --
-الموقع: --
-البوصلة: --
-تطبيق تثبيت التطبيق على الهاتف
-المدى الاتجاه المتجهات زمن المتجه
+var T={},gps=null,cmpH=null,ws=null,wsWant=false,demo=false,ackUntil=0,audio=null,deferred=null;
+var RNG=[0.5,1.5,3,6,12,24];
+
+function fmtD(nm){var v=nm*DF[S.ud];return v<10?v.toFixed(2):v.toFixed(1)}
+function num(s){var v=parseFloat(String(s).replace(",","."));return isNaN(v)?null:v}
+
+function parseCoord(s,isLat){
+ s=String(s).trim();if(!s)return null;
+ var up=s.toUpperCase(),neg=/[SW]/.test(up),
+  n=(up.match(/-?\d+(?:[.,]\d+)?/g)||[]).map(function(x){return parseFloat(x.replace(",","."))});
+ if(!n.length||n.some(isNaN))return null;
+ var v;
+ if(n.length===1){v=n[0]; if(neg)v=-Math.abs(v)}
+ else{var sg=(n[0]<0||neg)?-1:1;v=sg*(Math.abs(n[0])+Math.abs(n[1])/60+(n[2]?Math.abs(n[2])/3600:0))}
+ var lim=isLat?90:180;
+ return Math.abs(v)<=lim?v:null;
+}
+
+/* ---- own ship ---- */
+function own(){
+ var o={lat:null,lon:null,cog:0,sog:0,hdg:0,fix:false,src:""};
+ if(S.mode==="gps"&&gps){
+  o.lat=gps.latitude;o.lon=gps.longitude;o.fix=true;o.src="GPS";
+  o.sog=(gps.speed!=null&&gps.speed>=0)?gps.speed*1.943844:0;
+  o.cog=(gps.heading!=null&&!isNaN(gps.heading)&&o.sog>0.5)?gps.heading:0;
+ }else if(S.mode==="man"){
+  var la=parseCoord(S.lat,true),lo=parseCoord(S.lon,false);
+  if(la!=null&&lo!=null){o.lat=la;o.lon=lo;o.fix=true;o.src="DR"}
+ }
+ var c=num(S.cog),s=num(S.sog);
+ if(c!=null)o.cog=((c%360)+360)%360;
+ if(s!=null&&s>=0)o.sog=s/SF[S.us];
+ var h=num(S.hdg);
+ if(S.hs==="compass"&&cmpH!=null)o.hdg=cmpH;
+ else if(S.hs==="man"&&h!=null)o.hdg=((h%360)+360)%360;
+ else o.hdg=o.cog;
+ return o;
+}
+
+/* ---- CPA / TCPA ---- */
+function calc(o,t,now){
+ var age=Math.max(0,(now-t.ts)/3600000),
+  tv=t.sog*age,
+  lat=t.lat+tv*Math.cos(t.cog*D2R)/60,
+  lon=t.lon+tv*Math.sin(t.cog*D2R)/(60*Math.max(0.05,Math.cos(t.lat*D2R)));
+ var x=(lon-o.lon)*60*Math.cos(o.lat*D2R),y=(lat-o.lat)*60;
+ var vx=t.sog*Math.sin(t.cog*D2R)-o.sog*Math.sin(o.cog*D2R),
+     vy=t.sog*Math.cos(t.cog*D2R)-o.sog*Math.cos(o.cog*D2R);
+ var v2=vx*vx+vy*vy,rg=Math.sqrt(x*x+y*y),tc=null,cpa=rg;
+ if(v2>1e-6){
+  var th=-(x*vx+y*vy)/v2;
+  if(th>0){tc=th*60;var cx=x+vx*th,cy=y+vy*th;cpa=Math.sqrt(cx*cx+cy*cy)}else tc=th*60;
+ }
+ var brg=(Math.atan2(x,y)/D2R+360)%360;
+ return {x:x,y:y,vx:t.sog*Math.sin(t.cog*D2R),vy:t.sog*Math.cos(t.cog*D2R),rg:rg,brg:brg,cpa:cpa,tcpa:tc};
+}
+
+function level(r){
+ var lc=num(S.cpa),lt=num(S.tcpa);if(lc==null)lc=0.5;if(lt==null)lt=12;
+ if(r.tcpa==null||r.tcpa<0)return 0;
+ if(r.cpa<=lc&&r.tcpa<=lt)return 2;
+ if(r.cpa<=lc*2&&r.tcpa<=lt*1.5)return 1;
+ return 0;
+}
+
+/* ---- AIS ---- */
+function put(id,lat,lon,sog,cog,name){
+ lat=+lat;lon=+lon;
+ if(!isFinite(lat)||!isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)return;
+ sog=+sog;cog=+cog;
+ if(!isFinite(sog)||sog>=102.3||sog<0)sog=0;
+ if(!isFinite(cog)||cog>=360||cog<0)cog=0;
+ var p=T[id]||{};
+ T[id]={id:id,lat:lat,lon:lon,sog:sog,cog:cog,name:name||p.name||String(id),ts:Date.now()};
+}
+function onMsg(m){
+ if(Array.isArray(m)){m.forEach(onMsg);return}
+ if(!m||typeof m!=="object")return;
+ if(m.Message&&m.MessageType){
+  var p=m.Message[m.MessageType]||{},md=m.MetaData||{};
+  var id=md.MMSI||p.UserID;
+  if(id!=null&&p.Latitude!=null)put(id,p.Latitude,p.Longitude,p.Sog,p.Cog,(md.ShipName||"").trim());
+  return;
+ }
+ var id2=m.mmsi!=null?m.mmsi:(m.MMSI!=null?m.MMSI:m.id);
+ var la=m.lat!=null?m.lat:(m.latitude!=null?m.latitude:m.Latitude);
+ var lo=m.lon!=null?m.lon:(m.lng!=null?m.lng:(m.longitude!=null?m.longitude:m.Longitude));
+ var sg=m.sog!=null?m.sog:(m.speed!=null?m.speed:m.Sog);
+ var cg=m.cog!=null?m.cog:(m.course!=null?m.course:m.Cog);
+ if(id2!=null&&la!=null&&lo!=null)put(id2,la,lo,sg,cg,m.name||m.shipname||m.ShipName);
+}
+function connect(){
+ var u=(S.relay||"").trim();
+ if(!/^wss?:\/\//i.test(u)){$("sC").textContent="الاتصال: رابط غير صالح";return}
+ wsWant=true;if(ws){try{ws.close()}catch(e){}}
+ $("sC").textContent="الاتصال: جارٍ...";
+ try{ws=new WebSocket(u)}catch(e){$("sC").textContent="الاتصال: خطأ";return}
+ ws.onopen=function(){$("sC").textContent="الاتصال: متصل"};
+ ws.onmessage=function(e){try{onMsg(JSON.parse(e.data))}catch(x){}};
+ ws.onerror=function(){$("sC").textContent="الاتصال: خطأ"};
+ ws.onclose=function(){$("sC").textContent="الاتصال: منقطع";if(wsWant)setTimeout(function(){if(wsWant)connect()},5000)};
+}
+function disconnect(){wsWant=false;if(ws){try{ws.close()}catch(e){}}$("sC").textContent="الاتصال: --"}
+
+/* ---- demo ---- */
+function startDemo(){
+ var o=own();
+ if(!o.fix){S.mode="man";S.lat="26.96";S.lon="56.27";$("mode").value="man";$("lat").value="26.96";$("lon").value="56.27";save();o=own()}
+ demo=true;
+ var bs=[[40,3,200,12],[130,2,330,10],[250,4.5,70,14],[310,5,150,8],[10,1.2,0,0],[190,6,20,16]];
+ bs.forEach(function(b,i){
+  var la=o.lat+b[1]*Math.cos(b[0]*D2R)/60,lo=o.lon+b[1]*Math.sin(b[0]*D2R)/(60*Math.cos(o.lat*D2R));
+  T["D"+i]={id:"D"+i,lat:la,lon:lo,sog:b[3],cog:b[2],name:"DEMO-"+(i+1),ts:Date.now(),demo:1};
+ });
+}
+
+/* ---- sensors ---- */
+function startGPS(){
+ if(!navigator.geolocation){$("sP").textContent="الموقع: غير مدعوم";return}
+ navigator.geolocation.watchPosition(function(p){gps=p.coords;gps.ts=Date.now()},
+  function(e){$("sP").textContent="الموقع: "+(e.code===1?"مرفوض":"خطأ")},
+  {enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+}
+function onOri(e){
+ var h=null;
+ if(e.webkitCompassHeading!=null)h=e.webkitCompassHeading;
+ else if(e.alpha!=null&&(e.absolute||e.type==="deviceorientationabsolute"))h=360-e.alpha;
+ if(h!=null&&isFinite(h)){
+  var sa=(screen.orientation&&screen.orientation.angle)||0;
+  cmpH=((h+sa)%360+360)%360;
+ }
+}
+function startCompass(){
+ function add(){
+  window.addEventListener("deviceorientationabsolute",onOri,true);
+  window.addEventListener("deviceorientation",onOri,true);
+  $("cmp").classList.add("on");
+ }
+ var D=window.DeviceOrientationEvent;
+ if(D&&typeof D.requestPermission==="function"){
+  D.requestPermission().then(function(r){if(r==="granted")add();else $("sH").textContent="البوصلة: مرفوضة"}).catch(function(){$("sH").textContent="البوصلة: خطأ"});
+ }else if(D)add();else $("sH").textContent="البوصلة: غير مدعومة";
+}
+
+/* ---- audio ---- */
+function beep(){
+ try{
+  if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();
+  if(audio.state==="suspended")audio.resume();
+  var o=audio.createOscillator(),g=audio.createGain();
+  o.type="square";o.frequency.value=880;g.gain.value=0.15;
+  o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+0.25);
+ }catch(e){}
+ try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
+}
+
+/* ---- render ---- */
+var cv=$("cv"),cx=cv.getContext("2d");
+function col(n){return getComputedStyle(document.body).getPropertyValue(n).trim()||"#fff"}
+function draw(o,rows){
+ var dpr=window.devicePixelRatio||1,w=cv.clientWidth;
+ if(!w)return;
+ if(cv.width!==Math.round(w*dpr)){cv.width=Math.round(w*dpr);cv.height=cv.width}
+ cx.setTransform(dpr,0,0,dpr,0,0);
+ cx.clearRect(0,0,w,w);
+ var c=w/2,R=c-16,k=R/S.rng,rot=S.ori==="hu"?o.hdg*D2R:0;
+ var cA=col("--ac"),cR=col("--rg"),cT=col("--tx"),cM=col("--mt"),cW=col("--wr"),cD=col("--dg"),cO=col("--ok");
+ function P(dx,dy){return [c+(dx*Math.cos(rot)-dy*Math.sin(rot))*k,c-(dx*Math.sin(rot)+dy*Math.cos(rot))*k]}
+ cx.lineWidth=1;cx.strokeStyle=cR;cx.fillStyle=cM;cx.font="11px sans-serif";cx.textAlign="left";
+ for(var i=1;i<=4;i++){
+  cx.beginPath();cx.arc(c,c,R*i/4,0,7);cx.stroke();
+  cx.fillText(fmtD(S.rng*i/4)+" "+DL[S.ud],c+3,c-R*i/4+11);
+ }
+ for(var a=0;a<360;a+=30){
+  var q=a*D2R-rot,x1=c+Math.sin(q)*R,y1=c-Math.cos(q)*R;
+  cx.beginPath();cx.moveTo(c,c);cx.lineTo(x1,y1);cx.stroke();
+  cx.textAlign="center";cx.fillText(String(a),c+Math.sin(q)*(R+9),c-Math.cos(q)*(R+9)+4);
+ }
+ if(!o.fix){cx.fillStyle=cD;cx.font="bold 18px sans-serif";cx.textAlign="center";cx.fillText("NO FIX",c,c-20);return}
+ var vm=+S.vec,hr=vm/60;
+ // heading line
+ var hq=o.hdg*D2R-rot;
+ cx.strokeStyle=cO;cx.lineWidth=2;cx.beginPath();cx.moveTo(c,c);cx.lineTo(c+Math.sin(hq)*R,c-Math.cos(hq)*R);cx.stroke();
+ // own vector
+ if(vm>0&&o.sog>0.1){
+  var e=P(o.sog*Math.sin(o.cog*D2R)*hr,o.sog*Math.cos(o.cog*D2R)*hr);
+  cx.strokeStyle=cO;cx.lineWidth=2;cx.setLineDash([5,4]);cx.beginPath();cx.moveTo(c,c);cx.lineTo(e[0],e[1]);cx.stroke();cx.setLineDash([]);
+ }
+ cx.fillStyle=cO;cx.beginPath();cx.arc(c,c,5,0,7);cx.fill();
+ rows.forEach(function(r){
+  if(r.rg>S.rng*1.05)return;
+  var p=P(r.x,r.y),colr=r.lv===2?cD:r.lv===1?cW:cT;
+  if(vm>0&&r.t.sog>0.1){
+   var e2=P(r.x+r.vx*hr,r.y+r.vy*hr);
+   cx.strokeStyle=colr;cx.lineWidth=1.5;cx.beginPath();cx.moveTo(p[0],p[1]);cx.lineTo(e2[0],e2[1]);cx.stroke();
+  }
+  var ang=r.t.cog*D2R-rot;
+  cx.save();cx.translate(p[0],p[1]);cx.rotate(ang);
+  cx.fillStyle=colr;cx.beginPath();cx.moveTo(0,-8);cx.lineTo(5,6);cx.lineTo(-5,6);cx.closePath();cx.fill();
+  cx.restore();
+  if(r.lv>0){cx.strokeStyle=colr;cx.lineWidth=2;cx.beginPath();cx.arc(p[0],p[1],12,0,7);cx.stroke()}
+ });
+ cx.fillStyle=cA;cx.font="12px sans-serif";cx.textAlign="left";
+ cx.fillText((S.ori==="hu"?"H-UP":"N-UP")+"  HDG "+Math.round(o.hdg)+"°  COG "+Math.round(o.cog)+"°  SOG "+(o.sog*SF[S.us]).toFixed(1)+" "+SL[S.us],6,14);
+}
+
+function tick(){
+ var now=Date.now(),o=own(),rows=[],anyAlarm=false;
+ for(var id in T){if(now-T[id].ts>600000&&!T[id].demo){delete T[id];continue}
+  if(T[id].demo)T[id].ts=T[id].ts; }
+ if(o.fix){
+  for(var id2 in T){
+   var t=T[id2],r=calc(o,t,now);r.t=t;r.lv=level(r);rows.push(r);
+   if(r.lv===2)anyAlarm=true;
+  }
+  rows.sort(function(a,b){return a.cpa-b.cpa});
+ }
+ // badges / status
+ var fb=$("fix");fb.textContent=o.fix?("FIX "+o.src):"NO FIX";fb.className="badge "+(o.fix?"ok":"bad");
+ $("sP").textContent="الموقع: "+(o.fix?o.lat.toFixed(4)+", "+o.lon.toFixed(4):"--");
+ $("sH").textContent="البوصلة: "+(cmpH!=null?Math.round(cmpH)+"°":"--");
+ $("sT").textContent="الأهداف: "+rows.length;
+ // alarm
+ var al=$("alarm");
+ if(anyAlarm){
+  var w=rows.filter(function(r){return r.lv===2})[0];
+  al.style.display="block";
+  al.textContent="⚠ CPA: "+w.t.name+" — "+fmtD(w.cpa)+" "+DL[S.ud]+" / "+Math.round(w.tcpa)+" min";
+  if(now>ackUntil)beep();
+ }else al.style.display="none";
+ // table
+ var tb=$("tb");tb.textContent="";
+ rows.slice(0,30).forEach(function(r){
+  var tr=document.createElement("tr");tr.className=r.lv===2?"d":r.lv===1?"w":"";
+  var tc=r.tcpa==null?"--":(r.tcpa<0?"--":Math.floor(r.tcpa)+":"+("0"+Math.round((r.tcpa%1)*60)%60).slice(-2));
+  [r.t.name.slice(0,14),fmtD(r.rg),Math.round(r.brg)+"°",fmtD(r.cpa),tc,r.lv===2?"ALARM":r.lv===1?"WARN":(r.tcpa!=null&&r.tcpa<0?"OPEN":"SAFE")].forEach(function(v){
+   var td=document.createElement("td");td.textContent=v;tr.appendChild(td)});
+  tb.appendChild(tr);
+ });
+ $("empty").style.display=rows.length?"none":"block";
+ draw(o,rows);
+}
+
+/* ---- UI ---- */
+function fillRng(){
+ var s=$("rng");s.textContent="";
+ RNG.forEach(function(v){var op=document.createElement("option");op.value=v;op.textContent=fmtD(v)+" "+DL[S.ud];if(+S.rng===v)op.selected=true;s.appendChild(op)});
+}
+function units(){
+ fillRng();
+ $("thR").textContent="Range "+DL[S.ud];$("thC").textContent="CPA "+DL[S.ud];
+ $("cpaL").textContent="CPA ("+DL[S.ud]+")";$("sogL").textContent="SOG يدوي ("+SL[S.us]+")";
+}
+function bind(id,key,after){
+ var el=$(id);el.value=S[key];
+ el.addEventListener("input",function(){S[key]=el.value;save();after&&after()});
+}
+var cpaOld="nm";
+function init(){
+ bind("ori","ori");bind("vec","vec");bind("hs","hs");bind("mode","mode");
+ bind("lat","lat");bind("lon","lon");bind("cog","cog");bind("sog","sog");bind("hdg","hdg");bind("relay","relay");bind("tcpa","tcpa");
+ $("nav").selectedIndex=+S.nav||0;$("nav").addEventListener("change",function(){S.nav=$("nav").selectedIndex;save()});
+ $("rng").addEventListener("change",function(){S.rng=+$("rng").value;save()});
+ // CPA stored internally in NM; displayed in chosen unit
+ $("cpa").value=(num(S.cpa)*DF[S.ud]).toFixed(2);
+ $("cpa").addEventListener("input",function(){var v=num($("cpa").value);if(v!=null){S.cpa=String(v/DF[S.ud]);save()}});
+ $("ud").value=S.ud;$("us").value=S.us;$("nt").value=S.nt;
+ $("ud").addEventListener("change",function(){S.ud=$("ud").value;save();units();$("cpa").value=(num(S.cpa)*DF[S.ud]).toFixed(2)});
+ $("us").addEventListener("change",function(){
+  var c=num(S.sog);if(c!=null){var kn=c/SF[S.us];S.us=$("us").value;S.sog=String(+(kn*SF[S.us]).toFixed(1));$("sog").value=S.sog}else S.us=$("us").value;
+  save();units()});
+ $("nt").addEventListener("change",function(){S.nt=$("nt").value;document.body.classList.toggle("night",S.nt==="1");save()});
+ document.body.classList.toggle("night",S.nt==="1");
+ units();
+ $("ack").onclick=function(){ackUntil=Date.now()+60000};
+ $("conn").onclick=connect;$("disc").onclick=disconnect;
+ $("cmp").onclick=startCompass;
+ $("demo").onclick=function(){if(demo){demo=false;for(var k in T)if(T[k].demo)delete T[k];$("demo").classList.remove("on")}else{startDemo();$("demo").classList.add("on")}};
+ cv.addEventListener("click",function(){var i=RNG.indexOf(+S.rng);S.rng=RNG[(i+1)%RNG.length];$("rng").value=S.rng;save()});
+ window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferred=e;$("inst").style.display="block"});
+ $("inst").onclick=function(){if(deferred){deferred.prompt();deferred=null;$("inst").style.display="none"}};
+ document.addEventListener("pointerdown",function f(){try{if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();audio.resume&&audio.resume()}catch(e){}
+  try{navigator.wakeLock&&navigator.wakeLock.request("screen").catch(function(){})}catch(e){}
+  document.removeEventListener("pointerdown",f)});
+ window.addEventListener("resize",tick);
+ startGPS();
+ if(/^wss?:\/\//i.test(S.relay||"")&&0)connect();
+ if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("./sw.js").catch(function(){});
+ tick();setInterval(tick,1000);
+}
+init();
+})();
+</script>
+</body>
+</html>
