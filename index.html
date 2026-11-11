@@ -110,7 +110,7 @@ var S={rng:6,ori:"hu",vec:6,ud:"nm",us:"kn",nt:"0",nav:0,mode:"gps",lat:"",lon:"
 try{var sv=JSON.parse(localStorage.getItem("mr9")||"{}");for(var k in sv)if(k in S)S[k]=sv[k]}catch(e){}
 function save(){try{localStorage.setItem("mr9",JSON.stringify(S))}catch(e){}}
 
-var msgs=0,opens=0,lastRaw="",T={},gps=null,cmpH=null,ws=null,wsWant=false,demo=false,ackUntil=0,audio=null,deferred=null;
+var bo=3000,msgs=0,opens=0,lastRaw="",T={},gps=null,cmpH=null,ws=null,wsWant=false,demo=false,ackUntil=0,audio=null,deferred=null;
 var RNG=[0.5,1.5,3,6,12,24];
 
 function fmtD(nm){var v=nm*DF[S.ud];return v<10?v.toFixed(2):v.toFixed(1)}
@@ -182,6 +182,7 @@ function put(id,lat,lon,sog,cog,name){
  sog=+sog;cog=+cog;
  if(!isFinite(sog)||sog>=102.3||sog<0)sog=0;
  if(!isFinite(cog)||cog>=360||cog<0)cog=0;
+ bo=3000;
  var p=T[id]||{};
  T[id]={id:id,lat:lat,lon:lon,sog:sog,cog:cog,name:name||p.name||String(id),ts:Date.now()};
 }
@@ -210,7 +211,7 @@ function connect(){
  ws.onopen=function(){opens++;$("sC").textContent="الاتصال: متصل"};
  ws.onmessage=function(e){if(e.data==="ping")return;msgs++;lastRaw=String(e.data).slice(0,150);try{onMsg(JSON.parse(e.data))}catch(x){}};
  ws.onerror=function(){$("sC").textContent="الاتصال: خطأ"};
- ws.onclose=function(e){$("sC").textContent="الاتصال: منقطع ("+e.code+(e.reason?" "+e.reason:"")+")";if(wsWant)setTimeout(function(){if(wsWant)connect()},5000)};
+ ws.onclose=function(e){$("sC").textContent="الاتصال: منقطع ("+e.code+(e.reason?" "+e.reason:"")+")";if(wsWant){var d=bo;bo=Math.min(bo*1.5,30000);setTimeout(function(){if(wsWant)connect()},d)}};
 }
 function disconnect(){wsWant=false;if(ws){try{ws.close()}catch(e){}}$("sC").textContent="الاتصال: --"}
 
