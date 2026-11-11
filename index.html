@@ -209,7 +209,7 @@ function connect(){
  $("sC").textContent="الاتصال: جارٍ...";
  try{ws=new WebSocket(u)}catch(e){$("sC").textContent="الاتصال: خطأ";return}
  ws.onopen=function(){opens++;$("sC").textContent="الاتصال: متصل"};
- ws.onmessage=function(e){if(e.data==="ping")return;msgs++;lastRaw=String(e.data).slice(0,150);try{onMsg(JSON.parse(e.data))}catch(x){}};
+ ws.onmessage=function(e){if(e.data==="ping")return;var rl=String(e.data).indexOf('{"relay"')===0;if(!rl)msgs++;lastRaw=String(e.data).slice(0,150);try{onMsg(JSON.parse(e.data))}catch(x){}};
  ws.onerror=function(){$("sC").textContent="الاتصال: خطأ"};
  ws.onclose=function(e){$("sC").textContent="الاتصال: منقطع ("+e.code+(e.reason?" "+e.reason:"")+")";if(wsWant){var d=bo;bo=Math.min(bo*1.5,30000);setTimeout(function(){if(wsWant)connect()},d)}};
 }

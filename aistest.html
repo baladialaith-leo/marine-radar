@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIS direct test</title>
+<style>body{font:15px system-ui;background:#020617;color:#e2e8f0;padding:12px}
+input,button,select{font:inherit;width:100%;padding:10px;margin:6px 0;background:#0b1224;color:#e2e8f0;border:1px solid #1e293b;border-radius:6px}
+pre{white-space:pre-wrap;word-break:break-all;background:#0b1224;padding:8px;border-radius:6px}</style></head><body>
+<h3>Direct aisstream test (no Worker)</h3>
+<p>Paste your key here only for this test. It is not saved anywhere and is sent only to aisstream.io.</p>
+<input id="k" type="password" placeholder="AISSTREAM API key" autocomplete="off">
+<select id="b">
+<option value="50.9,1.0,51.2,1.8">Dover Strait (busy)</option>
+<option value="24.5,54,28.5,58.5">Hormuz</option>
+</select>
+<button id="go">Start</button><button id="stop">Stop</button>
+<pre id="o">idle</pre>
+<script>
+var ws,n=0,first="",t0=0,state="idle",err="";
+function show(){document.getElementById("o").textContent="state: "+state+"\nmessages: "+n+"\nsecs: "+Math.round((Date.now()-t0)/1000)+"\nfirst: "+(first||"-")+(err?"\nnote: "+err:"")}
+document.getElementById("go").onclick=function(){
+ var key=document.getElementById("k").value.trim(),b=document.getElementById("b").value.split(",").map(Number);
+ if(!key){err="no key";show();return}
+ n=0;first="";err="";t0=Date.now();state="connecting";
+ try{if(ws)ws.close()}catch(e){}
+ ws=new WebSocket("wss://stream.aisstream.io/v0/stream");
+ ws.onopen=function(){state="open";ws.send(JSON.stringify({APIKey:key,BoundingBoxes:[[[b[0],b[1]],[b[2],b[3]]]],FilterMessageTypes:["PositionReport"]}))};
+ ws.onmessage=function(e){n++;if(!first){first=(typeof e.data==="string"?e.data:"[binary]").slice(0,200).replace(key,"***")}};
+ ws.onerror=function(){err="error"};
+ ws.onclose=function(e){state="closed "+e.code+" "+(e.reason||"")};
+};
+document.getElementById("stop").onclick=function(){try{ws.close()}catch(e){}};
+setInterval(show,500);
+</script></body></html>
