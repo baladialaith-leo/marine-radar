@@ -95,7 +95,7 @@ input[type=range]{padding:0;min-height:30px}
  <h2>بث AIS الحي</h2>
  <label>رابط المرحّل Relay URL (wss://...workers.dev)<input id="relay" dir="ltr" placeholder="wss://example.workers.dev"></label>
  <div class="row" style="margin-top:8px"><button id="conn">اتصال</button><button id="disc">قطع</button></div>
- <div class="st"><span id="sC">الاتصال: --</span><span id="sP">الموقع: --</span><span id="sH">البوصلة: --</span><span id="sT">الأهداف: 0</span><span id="sD" style="grid-column:1/-1;direction:ltr;text-align:left"></span></div>
+ <div class="st"><span id="sC">الاتصال: --</span><span id="sP">الموقع: --</span><span id="sH">البوصلة: --</span><span id="sT">الأهداف: 0</span><span id="sL" style="grid-column:1/-1;direction:ltr;text-align:left;word-break:break-all"></span><span id="sD" style="grid-column:1/-1;direction:ltr;text-align:left"></span></div>
  <div class="row" style="margin-top:8px"><button id="inst" style="display:none">تثبيت التطبيق على الهاتف</button></div>
 </section>
 </div>
@@ -110,7 +110,7 @@ var S={rng:6,ori:"hu",vec:6,ud:"nm",us:"kn",nt:"0",nav:0,mode:"gps",lat:"",lon:"
 try{var sv=JSON.parse(localStorage.getItem("mr9")||"{}");for(var k in sv)if(k in S)S[k]=sv[k]}catch(e){}
 function save(){try{localStorage.setItem("mr9",JSON.stringify(S))}catch(e){}}
 
-var msgs=0,T={},gps=null,cmpH=null,ws=null,wsWant=false,demo=false,ackUntil=0,audio=null,deferred=null;
+var msgs=0,opens=0,lastRaw="",T={},gps=null,cmpH=null,ws=null,wsWant=false,demo=false,ackUntil=0,audio=null,deferred=null;
 var RNG=[0.5,1.5,3,6,12,24];
 
 function fmtD(nm){var v=nm*DF[S.ud];return v<10?v.toFixed(2):v.toFixed(1)}
@@ -207,8 +207,8 @@ function connect(){
  wsWant=true;if(ws){try{ws.close()}catch(e){}}
  $("sC").textContent="الاتصال: جارٍ...";
  try{ws=new WebSocket(u)}catch(e){$("sC").textContent="الاتصال: خطأ";return}
- ws.onopen=function(){msgs=0;$("sC").textContent="الاتصال: متصل"};
- ws.onmessage=function(e){msgs++;try{onMsg(JSON.parse(e.data))}catch(x){}};
+ ws.onopen=function(){opens++;$("sC").textContent="الاتصال: متصل"};
+ ws.onmessage=function(e){if(e.data==="ping")return;msgs++;lastRaw=String(e.data).slice(0,150);try{onMsg(JSON.parse(e.data))}catch(x){}};
  ws.onerror=function(){$("sC").textContent="الاتصال: خطأ"};
  ws.onclose=function(e){$("sC").textContent="الاتصال: منقطع ("+e.code+(e.reason?" "+e.reason:"")+")";if(wsWant)setTimeout(function(){if(wsWant)connect()},5000)};
 }
@@ -331,6 +331,7 @@ function tick(){
  var fb=$("fix");fb.textContent=o.fix?("FIX "+o.src):"NO FIX";fb.className="badge "+(o.fix?"ok":"bad");
  $("sP").textContent="الموقع: "+(o.fix?o.lat.toFixed(4)+", "+o.lon.toFixed(4):"--");
  $("sH").textContent="البوصلة: "+(cmpH!=null?Math.round(cmpH)+"°":"--");
+ $("sL").textContent="connects:"+opens+"  last: "+(lastRaw||"-");
  $("sT").textContent="الأهداف: "+Object.keys(T).length+" | رسائل: "+msgs;
  // alarm
  var al=$("alarm");
