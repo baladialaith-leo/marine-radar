@@ -95,7 +95,7 @@ input[type=range]{padding:0;min-height:30px}
  <h2>بث AIS الحي</h2>
  <label>رابط المرحّل Relay URL (wss://...workers.dev)<input id="relay" dir="ltr" placeholder="wss://example.workers.dev"></label>
  <div class="row" style="margin-top:8px"><button id="conn">اتصال</button><button id="disc">قطع</button></div>
- <div class="st"><span id="sC">الاتصال: --</span><span id="sP">الموقع: --</span><span id="sH">البوصلة: --</span><span id="sT">الأهداف: 0</span></div>
+ <div class="st"><span id="sC">الاتصال: --</span><span id="sP">الموقع: --</span><span id="sH">البوصلة: --</span><span id="sT">الأهداف: 0</span><span id="sD" style="grid-column:1/-1;direction:ltr;text-align:left"></span></div>
  <div class="row" style="margin-top:8px"><button id="inst" style="display:none">تثبيت التطبيق على الهاتف</button></div>
 </section>
 </div>
@@ -110,7 +110,7 @@ var S={rng:6,ori:"hu",vec:6,ud:"nm",us:"kn",nt:"0",nav:0,mode:"gps",lat:"",lon:"
 try{var sv=JSON.parse(localStorage.getItem("mr9")||"{}");for(var k in sv)if(k in S)S[k]=sv[k]}catch(e){}
 function save(){try{localStorage.setItem("mr9",JSON.stringify(S))}catch(e){}}
 
-var T={},gps=null,cmpH=null,ws=null,wsWant=false,demo=false,ackUntil=0,audio=null,deferred=null;
+var msgs=0,T={},gps=null,cmpH=null,ws=null,wsWant=false,demo=false,ackUntil=0,audio=null,deferred=null;
 var RNG=[0.5,1.5,3,6,12,24];
 
 function fmtD(nm){var v=nm*DF[S.ud];return v<10?v.toFixed(2):v.toFixed(1)}
@@ -207,10 +207,10 @@ function connect(){
  wsWant=true;if(ws){try{ws.close()}catch(e){}}
  $("sC").textContent="الاتصال: جارٍ...";
  try{ws=new WebSocket(u)}catch(e){$("sC").textContent="الاتصال: خطأ";return}
- ws.onopen=function(){$("sC").textContent="الاتصال: متصل"};
- ws.onmessage=function(e){try{onMsg(JSON.parse(e.data))}catch(x){}};
+ ws.onopen=function(){msgs=0;$("sC").textContent="الاتصال: متصل"};
+ ws.onmessage=function(e){msgs++;try{onMsg(JSON.parse(e.data))}catch(x){}};
  ws.onerror=function(){$("sC").textContent="الاتصال: خطأ"};
- ws.onclose=function(){$("sC").textContent="الاتصال: منقطع";if(wsWant)setTimeout(function(){if(wsWant)connect()},5000)};
+ ws.onclose=function(e){$("sC").textContent="الاتصال: منقطع ("+e.code+(e.reason?" "+e.reason:"")+")";if(wsWant)setTimeout(function(){if(wsWant)connect()},5000)};
 }
 function disconnect(){wsWant=false;if(ws){try{ws.close()}catch(e){}}$("sC").textContent="الاتصال: --"}
 
@@ -331,7 +331,7 @@ function tick(){
  var fb=$("fix");fb.textContent=o.fix?("FIX "+o.src):"NO FIX";fb.className="badge "+(o.fix?"ok":"bad");
  $("sP").textContent="الموقع: "+(o.fix?o.lat.toFixed(4)+", "+o.lon.toFixed(4):"--");
  $("sH").textContent="البوصلة: "+(cmpH!=null?Math.round(cmpH)+"°":"--");
- $("sT").textContent="الأهداف: "+rows.length;
+ $("sT").textContent="الأهداف: "+Object.keys(T).length+" | رسائل: "+msgs;
  // alarm
  var al=$("alarm");
  if(anyAlarm){
@@ -367,6 +367,19 @@ function bind(id,key,after){
  var el=$(id);el.value=S[key];
  el.addEventListener("input",function(){S[key]=el.value;save();after&&after()});
 }
+function diag(){
+ var names=["manifest.json","sw.js","icon-192.png","icon-512.png","icon-maskable-512.png"];
+ Promise.all(names.map(function(n){var b=n.split(".")[0];
+  return fetch(n,{cache:"no-store"}).then(function(x){
+   if(!x.ok)return b+" ✗"+x.status;
+   if(n==="manifest.json")return x.json().then(function(){return b+" ✓"},function(){return b+" ✗JSON"});
+   return b+" ✓"}).catch(function(){return b+" ✗"})}))
+ .then(function(a){
+  var sw=("serviceWorker" in navigator)?navigator.serviceWorker.getRegistration().then(function(g){return g&&g.active?"SW ✓":"SW ✗"}):Promise.resolve("SW n/a");
+  return sw.then(function(v){a.push(v);$("sD").textContent=a.join("  ");
+   setTimeout(function(){$("sD").textContent=a.join("  ")+"  install:"+(deferred?"ready":"no")},4000)});
+ });
+}
 var cpaOld="nm";
 function init(){
  bind("ori","ori");bind("vec","vec");bind("hs","hs");bind("mode","mode");
@@ -396,7 +409,8 @@ function init(){
   document.removeEventListener("pointerdown",f)});
  window.addEventListener("resize",tick);
  startGPS();
- if(/^wss?:\/\//i.test(S.relay||"")&&0)connect();
+ if(/^wss?:\/\//i.test(S.relay||""))connect();
+ diag();
  if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("./sw.js").catch(function(){});
  tick();setInterval(tick,1000);
 }
